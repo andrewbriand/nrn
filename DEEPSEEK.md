@@ -587,6 +587,20 @@ export PATH="/opt/nvidia/hpc_sdk/Linux_x86_64/25.7/comm_libs/12.9/openmpi4/openm
 
 Add `-DNRN_ENABLE_MPI=ON` to cmake flags.
 
+### "error while loading shared libraries: /tmp/pgcudafat*.o"
+
+NVHPC stores CUDA fat binaries in `$TMPDIR` at link time. If `/tmp` gets cleaned by `systemd-tmpfiles` (daily on most distros), binaries built with `nrnivmodl` will fail at startup.
+
+**Fix**: Set `TMPDIR` to a persistent directory before building, then keep that directory:
+
+```bash
+mkdir -p /home/user/nrn/fatbin
+export TMPDIR=/home/user/nrn/fatbin
+nrnivmodl -coreneuron mod
+```
+
+After `nrnivmodl`, the binary references `pgcudafat*.o` files in `$TMPDIR` — they must not be deleted. Add `TMPDIR` to your environment setup script permanently.
+
 ## Build Configuration Summary
 
 ```
@@ -604,3 +618,17 @@ Interviews (GUI):    OFF
 Rx3D:                OFF
 Install Prefix:      ./install
 ```
+
+
+diff --git a/ringtest.py b/ringtest.py
+index b0e9067..ed5014c 100644
+--- a/ringtest.py
++++ b/ringtest.py
+@@ -164,6 +164,7 @@ def create_rings():
+         coreneuron.file_mode = coreneuron_file_mode
+         coreneuron.gpu = coreneuron_gpu
+         coreneuron.cell_permute = coreneuron_permute
++        coreneuron.cuda_interface = True
+
+         if args.multisplit is True:
+             print("Error: multi-split is not supported with CoreNEURON\n")
