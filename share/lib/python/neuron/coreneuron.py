@@ -70,6 +70,7 @@ class coreneuron(object):
     def __init__(self):
         self._enable = False
         self._gpu = False
+        self._cuda_interface = False
         self._num_gpus = 0
         self._file_mode = False
         self._cell_permute = None
@@ -132,6 +133,16 @@ class coreneuron(object):
                 )
             )
             self._cell_permute = self._default_cell_permute()
+
+    @property
+    def cuda_interface(self):
+        """Use the CUDA kernel solver instead of the OpenACC implementation.
+        Only takes effect when gpu=True and cell_permute=2."""
+        return self._cuda_interface
+
+    @cuda_interface.setter
+    def cuda_interface(self, value):
+        self._cuda_interface = bool(int(value))
 
     @property
     def num_gpus(self):
@@ -292,6 +303,8 @@ class coreneuron(object):
         # args derived from user properties
         if self._gpu:
             arg += " --gpu"
+            if self._cuda_interface:
+                arg += " --cuda-interface"
             if self._num_gpus:
                 arg += f" --num-gpus {self._num_gpus}"
         if self._file_mode:
