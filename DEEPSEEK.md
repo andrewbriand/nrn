@@ -276,6 +276,119 @@ NEURON 9.0 introduced breaking API changes vs older versions:
    coreneuron.cell_permute = 2  # 1 or 2
    ```
 
+## CUDA Kernel Solver (vs OpenACC)
+
+CoreNEURON has **two GPU backends** for the Hines matrix solver:
+
+| Backend | Source | Kernel Name | Activation |
+|---------|--------|-------------|------------|
+| OpenACC | `cellorder.cpp:605` | `solve_interleaved1_793` (auto-generated) | Default when `gpu=True` |
+| CUDA | `cellorder.cu:66` | `solve_interleaved2_kernel` (hand-written) | `coreneuron.cuda_interface = True` |
+
+### Architecture
+
+```
+solve_interleaved(ith)
+  ├── permute=1: solve_interleaved1()      → OpenACC kernel only
+  └── permute=2: solve_interleaved2()
+        ├── cuda_interface=False (default) → OpenACC kernel (solve_interleaved2_loop_body)
+        └── cuda_interface=True             → CUDA kernel (solve_interleaved2_kernel)
+```
+
+The CUDA kernel (`cellorder.cu:66-113`) is a hand-tuned `__global__` kernel that parallelizes across all threads in one launch. It performs triangular solve + back-substitution for the Hines matrix. The OpenACC path instead relies on compiler auto-parallelization of nested loops.
+
+**Important**: The CUDA kernel path only works with `cell_permute=2` because it's inside `solve_interleaved2()`. Setting `cell_permute=1` will call `solve_interleaved1()` which has no CUDA branch.
+
+### Enabling the CUDA Kernel
+
+```python
+from neuron import h, coreneuron
+
+coreneuron.enable = True
+coreneuron.gpu = True
+coreneuron.cell_permute = 2     # Required: CUDA kernel needs permute type 2
+coreneuron.cuda_interface = True  # Switch from OpenACC to CUDA backend
+```
+
+### Verifying Which Kernel is Active
+
+```bash
+nsys profile --trace=cuda --stats=true ./x86_64/special -python script.py 2>&1 | grep solve
+```
+
+- OpenACC active: `solve_interleaved1_793` or `solve_interleaved1_<n>`
+- CUDA active: `solve_interleaved2_kernel(NrnThread*, InterleaveInfo*, int)`
+
+### Run via CLI (standalone special-core)
+
+```bash
+./x86_64/special-core --gpu --cell-permute 2 --cuda-interface --tstop 100 --datpath .
+```
+
+### CUDA Kernel Correctness Tests
+
+The CUDA solver is tested by a C++ unit test that validates all 7 solver implementations produce numerically identical results (tolerance `2e-11`) against the reference CPU path.
+
+#### Build Test Target
+
+The test target requires rebuilding with `-DNRN_ENABLE_TESTS=ON`:
+
+```bash
+cd build
+cmake .. \
+    -DNRN_ENABLE_TESTS=ON \
+    <all your existing GPU build flags>
+cmake --build . --parallel $(nproc) --target test-solver
+```
+
+#### Run
+
+```bash
+ctest --test-dir build -R test-solver --output-on-failure -V
+```
+
+Or invoke the binary directly:
+
+```bash
+./build/bin/test-solver
+```
+
+#### Test Cases
+
+| Test Case | Description |
+|-----------|-------------|
+| `SingleCellAndThread` | 1 cell, 32 segments |
+| `UnbalancedCellSingleThread` | 1 cell, 19 segments (non power-of-2) |
+| `LargeCellSingleThread` | 1 cell, 4096 segments |
+| `ManySmallCellsSingleThread` | 1024 cells, 3 segments each |
+| `ManySmallCellsMultiThread` | 1024 cells split across 2 threads |
+| `LargeCellSingleThreadRandom` | 4096 segments, random matrix values |
+| `ManySmallCellsSingleThreadRandom` | 1024 cells, random matrix values |
+
+#### What Each Test Case Validates
+
+Each case runs **all 7 solver implementations** and compares output:
+
+```
+CellPermute0_CPU    (reference, permute=0, CPU)
+CellPermute0_GPU    (permute=0, OpenACC)
+CellPermute1_CPU    (permute=1, CPU)
+CellPermute1_GPU    (permute=1, OpenACC)
+CellPermute2_CPU    (permute=2, CPU)
+CellPermute2_GPU    (permute=2, OpenACC)
+CellPermute2_CUDA   (permute=2, CUDA kernel)   ← verifies solve_interleaved2_kernel
+```
+
+All produce bitwise-identical parent indices and numerically identical `d`, `rhs` values.
+
+#### Expected Output (passing)
+
+```
+Comparing SolverImplementation::CellPermute2_CUDA to SolverImplementation::CellPermute0_CPU
+...
+All tests passed (510942 assertions in 7 test cases)
+```
+
 ## Ringtest GPU Benchmark
 
 The [ringtest](https://github.com/neuronsimulator/ringtest) is the standard benchmark for CoreNEURON GPU performance. It simulates a network of ring-connected cells and scales well to test GPU acceleration.
@@ -325,6 +438,65 @@ nrnivmodl -coreneuron mod
 | Large | 16,384 | ~540,000 | 198.14s | 19.80s | **10.0x** |
 
 **Note**: GPU acceleration is most effective for large models. For small models (< 1000 cells), GPU overhead (data transfer, kernel launch) dominates and CPU may be faster. The crossover point where GPU becomes faster depends on model complexity and hardware.
+
+### Running with the CUDA Kernel Solver
+
+The ringtest CLI (`-gpu`) uses the default OpenACC backend. To use the hand-written CUDA `__global__` kernel, use the Python API:
+
+```bash
+./x86_64/special -python -c "
+from neuron import h, coreneuron
+import ringtest
+
+coreneuron.enable = True
+coreneuron.gpu = True
+coreneuron.cell_permute = 2      # Required for CUDA kernel path
+coreneuron.cuda_interface = True  # Enable CUDA kernel instead of OpenACC
+
+ringtest.create_rings(32, 8, (10,20), 8, method='fixed')
+ringtest.runsim(100)
+ringtest.write_spikes()
+" 2>&1 | grep -E "cuda.interface|Solver|spikes"
+# Output: --cuda-interface=true   Solver Time : 24.xxx
+```
+
+Or wrap the ringtest in a script that patches the defaults before calling `psolve`:
+
+```python
+# ringtest_cuda.py
+from neuron import h, coreneuron
+import ringtest
+
+coreneuron.enable = True
+coreneuron.gpu = True
+coreneuron.cell_permute = 2
+coreneuron.cuda_interface = True
+
+ringtest.create_rings(32, 8, (10,20), 8)
+ringtest.runsim(100)
+ringtest.write_spikes()
+```
+
+Verify the CUDA kernel is active:
+
+```bash
+nsys profile --trace=cuda --stats=true \
+    ./x86_64/special -python ringtest_cuda.py 2>&1 | grep solve
+# Expected: coreneuron::solve_interleaved2_kernel(NrnThread*, InterleaveInfo*, int)
+```
+
+Compare OpenACC vs CUDA solver performance:
+
+```bash
+# OpenACC (default)
+nsys profile --trace=cuda --stats=true -o /tmp/ringtest_openacc \
+    ./x86_64/special -python ringtest.py -tstop 100 -nring 256 -ncell 64 \
+    -branch 32 64 -coreneuron -gpu 2>&1 | grep Solver
+
+# CUDA kernel
+nsys profile --trace=cuda --stats=true -o /tmp/ringtest_cuda \
+    ./x86_64/special -python ringtest_cuda.py 2>&1 | grep Solver
+```
 
 ### Ringtest CLI Options
 
