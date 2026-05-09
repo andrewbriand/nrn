@@ -1,0 +1,15 @@
+cmake .. \
+    -DNRN_ENABLE_CORENEURON=ON \
+    -DCORENRN_ENABLE_GPU=ON \
+    -DNRN_ENABLE_INTERVIEWS=OFF \
+    -DNRN_ENABLE_RX3D=OFF \
+    -DNRN_ENABLE_MPI=OFF \
+    -DCMAKE_INSTALL_PREFIX="$PWD/../install" \
+    -DCMAKE_C_COMPILER=/opt/nvidia/hpc_sdk/Linux_x86_64/26.3/compilers/bin/nvc \
+    -DCMAKE_CXX_COMPILER=/opt/nvidia/hpc_sdk/Linux_x86_64/26.3/compilers/bin/nvc++ \
+    -DCMAKE_CUDA_COMPILER=/opt/nvidia/hpc_sdk/Linux_x86_64/26.3/compilers/bin/nvcc \
+    -DCUDAToolkit_ROOT="/opt/nvidia/hpc_sdk/Linux_x86_64/26.3/cuda/13.1/" \
+    -DCMAKE_CUDA_ARCHITECTURES=90 \
+    -DPYTHON_EXECUTABLE="/home/ubuntu/nrn/venv/bin/python" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DNRN_ENABLE_TESTS=ON

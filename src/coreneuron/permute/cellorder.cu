@@ -24,6 +24,7 @@ __device__ void triang_interleaved2_device(NrnThread* nt,
 
     int ip;
     double p;
+    #pragma unroll 1
     while (icycle >= 0) {
         // most efficient if istride equal warpsize, else branch divergence!
         if (icore < istride) {
@@ -45,6 +46,7 @@ __device__ void bksub_interleaved2_device(NrnThread* nt,
                                           int ncycle,
                                           int* stride,
                                           int firstnode) {
+    #pragma unroll 1
     for (int i = root; i < lastroot; i += warpsize) {
         nt->_actual_rhs[i] /= nt->_actual_d[i];  // the root
     }
@@ -52,6 +54,7 @@ __device__ void bksub_interleaved2_device(NrnThread* nt,
     int i = firstnode + icore;
 
     int ip;
+    #pragma unroll 1
     for (int icycle = 0; icycle < ncycle; ++icycle) {
         int istride = stride[icycle];
         if (icore < istride) {
