@@ -24,7 +24,7 @@ class Phase1 {
     void populate(NrnThread& nt, OMP_Mutex& mut);
 
   private:
-    std::vector<int> output_gids;
+    std::vector<long long> output_gids;
     std::vector<int> netcon_srcgids;
     std::vector<int> netcon_negsrcgid_tid;  // entries only for negative srcgids
 };

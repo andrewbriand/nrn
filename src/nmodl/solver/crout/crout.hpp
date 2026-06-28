@@ -16,6 +16,9 @@
  * Forward/Backward substitution: Implementation details : (Legacy code) nrn / scopmath / crout.c
  */
 
+#ifndef NMODL_CROUT_H
+#define NMODL_CROUT_H
+
 #include <Eigen/Core>
 #include <cmath>
 
@@ -212,3 +215,4 @@ nrn_pragma_omp(end declare target)
 
 }  // namespace crout
 }  // namespace nmodl
+#endif

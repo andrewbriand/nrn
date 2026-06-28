@@ -215,7 +215,7 @@ void nrnthread_group_ids(int* grp) {
 int nrnthread_dat1(int tid,
                    int& n_presyn,
                    int& n_netcon,
-                   std::vector<int>& output_gid,
+                   std::vector<long long>& output_gid,
                    int*& netcon_srcgid,
                    std::vector<int>& netcon_negsrcgid_tid) {
     if (tid >= nrn_nthread) {

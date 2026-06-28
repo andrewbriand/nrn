@@ -129,7 +129,7 @@ void write_nrnthread(const char* path, NrnThread& nt, CellGroup& cg) {
     // nrnthread_dat1(int tid, int& n_presyn, int& n_netcon, int*& output_gid, int*& netcon_srcgid);
     fprintf(f, "%d npresyn\n", cg.n_presyn);
     fprintf(f, "%d nnetcon\n", cg.n_netcon);
-    writeint(cg.output_gid.data(), cg.n_presyn);
+    writelong(cg.output_gid.data(), cg.n_presyn);
     writeint(cg.netcon_srcgid, cg.n_netcon);
 
     cg.output_gid.clear();
@@ -298,6 +298,12 @@ void write_nrnthread(const char* path, NrnThread& nt, CellGroup& cg) {
 void writeint_(int* p, size_t size, FILE* f) {
     fprintf(f, "chkpnt %d\n", chkpnt++);
     size_t n = fwrite(p, sizeof(int), size, f);
+    assert(n == size);
+}
+
+void writelong_(long long* p, size_t size, FILE* f) {
+    fprintf(f, "chkpnt %d\n", chkpnt++);
+    size_t n = fwrite(p, sizeof(long long), size, f);
     assert(n == size);
 }
 

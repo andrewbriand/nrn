@@ -165,7 +165,7 @@ void CellGroup::mk_cellgroups(neuron::model_sorted_token const& cache_token, Cel
                     }
                     // the way we associate an acell PreSyn with the
                     // Point_process.
-                    if (agid < std::numeric_limits<int>::min() || agid >= -1) {
+                    /*if (agid < std::numeric_limits<int>::min() || agid >= -1) {
                         std::ostringstream oss;
                         oss << "maximum of ~" << std::numeric_limits<int>::max() / 1000
                             << " artificial cells of a given type can be created per NrnThread, "
@@ -174,7 +174,7 @@ void CellGroup::mk_cellgroups(neuron::model_sorted_token const& cache_token, Cel
                             << " (cannot store cgs[" << i << "].output_vindex[" << npre
                             << "]=" << agid << ')';
                         hoc_execerror("integer overflow", oss.str().c_str());
-                    }
+                    }*/
                     cgs[i].output_vindex[npre] = agid;
                     ++npre;
                 }

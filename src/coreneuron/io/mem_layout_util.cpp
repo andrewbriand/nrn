@@ -7,8 +7,11 @@
 */
 
 #include "mem_layout_util.hpp"
+#include <nvtx3/nvToolsExt.h>
 
 #include <numeric>
+
+#include <iostream>
 
 namespace coreneuron {
 
@@ -45,6 +48,8 @@ int nrn_i_layout(int icnt, int cnt, int isz, int sz, int layout) {
 }
 
 std::array<int, 3> legacy2soaos_index(int legacy_index, const std::vector<int>& array_dims) {
+
+    nvtxRangePushA("legacy2soaos_index");
     int variable_count = static_cast<int>(array_dims.size());
     int row_width = std::accumulate(array_dims.begin(), array_dims.end(), 0);
 
@@ -63,6 +68,7 @@ std::array<int, 3> legacy2soaos_index(int legacy_index, const std::vector<int>& 
     }
     int array_index = column_index - prefix_sum;
 
+    nvtxRangePop();
     return {instance_index, variable_index, array_index};
 }
 

@@ -68,8 +68,8 @@ cmake .. \
     -DCMAKE_CXX_COMPILER=/opt/nvidia/hpc_sdk/Linux_x86_64/25.7/compilers/bin/nvc++ \
     -DCMAKE_CUDA_COMPILER=/opt/nvidia/hpc_sdk/Linux_x86_64/25.7/compilers/bin/nvcc \
     -DCUDAToolkit_ROOT="/opt/nvidia/hpc_sdk/Linux_x86_64/25.7/cuda/12.9" \
-    -DCMAKE_CUDA_ARCHITECTURES=89 \
-    -DPYTHON_EXECUTABLE="/path/to/nrn/venv/bin/python" \
+    -DCMAKE_CUDA_ARCHITECTURES=70 \
+    -DPYTHON_EXECUTABLE="/workspace/nrn/venv/bin/python" \
     -DCMAKE_BUILD_TYPE=Release
 ```
 

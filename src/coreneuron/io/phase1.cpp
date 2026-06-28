@@ -17,7 +17,7 @@
 int (*nrn2core_get_dat1_)(int tid,
                           int& n_presyn,
                           int& n_netcon,
-                          std::vector<int>& output_gid,
+                          std::vector<long long>& output_gid,
                           int*& netcon_srcgid,
                           std::vector<int>& netcon_negsrcgid_tid);
 
@@ -27,7 +27,7 @@ Phase1::Phase1(FileHandler& F) {
     int n_presyn = F.read_int();  /// Number of PreSyn-s in NrnThread nt
     int n_netcon = F.read_int();  /// Number of NetCon-s in NrnThread nt
 
-    this->output_gids = F.read_vector<int>(n_presyn);
+    this->output_gids = F.read_vector<long long>(n_presyn);
     this->netcon_srcgids = F.read_vector<int>(n_netcon);
     // For file mode transfer, it is not allowed that negative gids exist
     // in different threads. So this->netcon_tids remains clear.

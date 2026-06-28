@@ -20,6 +20,8 @@
 #include "coreneuron/io/mem_layout_util.hpp"
 #include "coreneuron/io/setup_fornetcon.hpp"
 
+#include <nvtx3/nvToolsExt.h>
+
 #if defined(_OPENMP)
 #include <omp.h>
 #endif
@@ -637,6 +639,7 @@ void Phase2::fill_before_after_lists(NrnThread& nt, const std::vector<Memb_func>
 }
 
 void Phase2::pdata_relocation(const NrnThread& nt, const std::vector<Memb_func>& memb_func) {
+    nvtxRangePushA("pdata_relocation");
     // Some pdata may index into data which has been reordered from AoS to
     // SoA. The four possibilities are if semantics is -1 (area), -5 (pointer),
     // -9 (diam), // or 0-999 (ion variables).
@@ -760,6 +763,7 @@ void Phase2::pdata_relocation(const NrnThread& nt, const std::vector<Memb_func>&
             }
         }
     }
+    nvtxRangePop();
 }
 
 void Phase2::set_dependencies(const NrnThread& nt, const std::vector<Memb_func>& memb_func) {
@@ -961,6 +965,7 @@ void Phase2::set_vec_play(NrnThread& nt, NrnThreadChkpnt& ntc) {
 }
 
 void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
+    nvtxRangePushA("populate");
     NrnThreadChkpnt& ntc = nrnthread_chkpnt[nt.id];
     ntc.file_id = userParams.gidgroups[nt.id];
 
@@ -1002,6 +1007,7 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
     int shadow_rhs_cnt = 0;
     nt.shadow_rhs_cnt = 0;
 
+    nvtxRangePushA("create_tml loop");
     NrnThreadMembList* tml_last = nullptr;
     for (int i = 0; i < n_mech; ++i) {
         auto tml =
@@ -1021,6 +1027,7 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
         }
         tml_last = tml;
     }
+    nvtxRangePop();
 
     if (shadow_rhs_cnt) {
         nt._shadow_rhs = (double*) ecalloc_align(nrn_soa_padded_size(shadow_rhs_cnt, 0),
@@ -1102,8 +1109,12 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
     // All the mechanism data and pdata.
     // Also fill in the pnt_offset
     // Complete spec of Point_process except for the acell presyn_ field.
+    nvtxRangePushA("data and pdata");
     int itml = 0;
     for (auto tml = nt.tml; tml; tml = tml->next, ++itml) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "data and pdata %i", itml);
+        nvtxRangePushA(buf);
         int type = tml->index;
         Memb_list* ml = tml->ml;
         int n = ml->nodecount;
@@ -1119,6 +1130,7 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
         mech_data_layout_transform<double>(ml->data, n, array_dims, layout);
 
         if (szdp) {
+            nvtxRangePushA("szdp");
             ml->pdata = (int*) ecalloc_align(nrn_soa_padded_size(n, layout) * szdp, sizeof(int));
             std::copy(tmls[itml].pdata.begin(), tmls[itml].pdata.end(), ml->pdata);
             mech_data_layout_transform<int>(ml->pdata, n, szdp, layout);
@@ -1141,10 +1153,14 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
                 }
             }
 #endif
+            nvtxRangePop();
         } else {
+            nvtxRangePushA("szdp else");
             ml->pdata = nullptr;
+            nvtxRangePop();
         }
         if (corenrn.get_pnt_map()[type] > 0) {  // POINT_PROCESS mechanism including acell
+            nvtxRangePushA("POINT_PROCESS");
             int cnt = ml->nodecount;
             Point_process* pnt = nullptr;
             pnt = nt.pntprocs + synoffset;
@@ -1157,10 +1173,12 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
                 nt._vdata[ml->pdata[nrn_i_layout(i, cnt, 1, szdp, layout)]] = pp;
                 pp->_tid = nt.id;
             }
+            nvtxRangePop();
         }
 
         auto& r = tmls[itml].nmodlrandom;
         if (r.size()) {
+            nvtxRangePushA("r.size()");
             size_t ix{};
             uint32_t n_randomvar = r[ix++];
             assert(r.size() == 1 + n_randomvar + 5 * n_randomvar * n);
@@ -1182,8 +1200,11 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
                     nt._vdata[ipd] = state;
                 }
             }
+            nvtxRangePop();
         }
+        nvtxRangePop();
     }
+    nvtxRangePop();
 
     // pnt_offset needed for SelfEvent transfer from NEURON. Not needed on GPU.
     // Ugh. Related but not same as NetReceiveBuffer._pnt_offset
@@ -1369,5 +1390,6 @@ void Phase2::populate(NrnThread& nt, const UserParams& userParams) {
     }
 
     set_net_send_buffer(nt._ml_list, pnt_offset);
+    nvtxRangePop();
 }
 }  // namespace coreneuron

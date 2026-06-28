@@ -28,11 +28,13 @@ void write_memb_mech_types(const char* fname);
 void write_globals(const char* fname);
 void write_nrnthread(const char* fname, NrnThread& nt, CellGroup& cg);
 void writeint_(int* p, size_t size, FILE* f);
+void writelong_(long long* p, size_t size, FILE* f);
 void writedbl_(double* p, size_t size, FILE* f);
 
 void write_uint32vec(std::vector<uint32_t>& vec, FILE* f);
 
 #define writeint(p, size) writeint_(p, size, f)
+#define writelong(p, size) writelong_(p, size, f)
 #define writedbl(p, size) writedbl_(p, size, f)
 // also for read
 struct Memb_list;

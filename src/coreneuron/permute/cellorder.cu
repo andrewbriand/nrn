@@ -13,7 +13,7 @@
 
 namespace coreneuron {
 
-__device__ void triang_interleaved2_device(NrnThread* nt,
+__device__ void triang_interleaved2_device(const NrnThread &nt,
                                            int icore,
                                            int ncycle,
                                            int* stride,
@@ -24,13 +24,14 @@ __device__ void triang_interleaved2_device(NrnThread* nt,
 
     int ip;
     double p;
+    #pragma unroll 1
     while (icycle >= 0) {
         // most efficient if istride equal warpsize, else branch divergence!
         if (icore < istride) {
-            ip = nt->_v_parent_index[i];
-            p = nt->_actual_a[i] / nt->_actual_d[i];
-            atomicAdd(&nt->_actual_d[ip], -p * nt->_actual_b[i]);
-            atomicAdd(&nt->_actual_rhs[ip], -p * nt->_actual_rhs[i]);
+            ip = nt._v_parent_index[i];
+            p = nt._actual_a[i] / nt._actual_d[i];
+            atomicAdd(&nt._actual_d[ip], -p * nt._actual_b[i]);
+            atomicAdd(&nt._actual_rhs[ip], -p * nt._actual_rhs[i]);
         }
         --icycle;
         istride = stride[icycle];
@@ -45,6 +46,7 @@ __device__ void bksub_interleaved2_device(NrnThread* nt,
                                           int ncycle,
                                           int* stride,
                                           int firstnode) {
+    #pragma unroll 1
     for (int i = root; i < lastroot; i += warpsize) {
         nt->_actual_rhs[i] /= nt->_actual_d[i];  // the root
     }
@@ -52,19 +54,24 @@ __device__ void bksub_interleaved2_device(NrnThread* nt,
     int i = firstnode + icore;
 
     int ip;
+    #pragma unroll 1
     for (int icycle = 0; icycle < ncycle; ++icycle) {
         int istride = stride[icycle];
         if (icore < istride) {
             ip = nt->_v_parent_index[i];
-            nt->_actual_rhs[i] -= nt->_actual_b[i] * nt->_actual_rhs[ip];
-            nt->_actual_rhs[i] /= nt->_actual_d[i];
+            auto tmp = nt->_actual_rhs[i] - nt->_actual_b[i] * nt->_actual_rhs[ip];
+            //nt->_actual_rhs[i] -= nt->_actual_b[i] * nt->_actual_rhs[ip];
+            nt->_actual_rhs[i] = tmp / nt->_actual_d[i];
         }
         i += istride;
     }
 }
 
 __global__ void solve_interleaved2_kernel(NrnThread* nt, InterleaveInfo* ii, int ncore) {
-    int icore = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (threadIdx.x < 32) {
+    //int icore = blockDim.x * blockIdx.x + threadIdx.x;
+    int icore = 32 * blockIdx.x + threadIdx.x;
 
     int* ncycles = ii->cellsize;         // nwarp of these
     int* stridedispl = ii->stridedispl;  // nwarp+1 of these
@@ -82,11 +89,14 @@ __global__ void solve_interleaved2_kernel(NrnThread* nt, InterleaveInfo* ii, int
         int firstnode = nodebegin[iwarp];
         int lastnode = nodebegin[iwarp + 1];
 
-        triang_interleaved2_device(nt, ic, ncycle, stride, lastnode);
+        triang_interleaved2_device(*nt, ic, ncycle, stride, lastnode);
+        __syncwarp();
         bksub_interleaved2_device(nt, root + ic, lastroot, ic, ncycle, stride, firstnode);
 
         icore += blockDim.x * gridDim.x;
     }
+    }
+    __syncthreads();
 }
 
 void solve_interleaved2_launcher(NrnThread* nt, InterleaveInfo* info, int ncore, void* stream) {
@@ -97,11 +107,12 @@ void solve_interleaved2_launcher(NrnThread* nt, InterleaveInfo* info, int ncore,
     /// In the OpenACC/OpenMP implementations threadsPerBlock is set to 32. From profiling the
     /// channel-benchmark circuits mentioned above we figured out that the best performance was
     /// achieved with this configuration
-    int threadsPerBlock = warpsize;
+    //int threadsPerBlock = warpsize;
+    int threadsPerBlock = warpsize * 32;
     /// Max number of blocksPerGrid for NVIDIA GPUs is 65535, so we need to make sure that the
     /// blocksPerGrid we launch the CUDA kernel with doesn't exceed this number
     const auto maxBlocksPerGrid = 65535;
-    int provisionalBlocksPerGrid = (ncore + threadsPerBlock - 1) / threadsPerBlock;
+    int provisionalBlocksPerGrid = (ncore + warpsize - 1) / warpsize;
     int blocksPerGrid = provisionalBlocksPerGrid <= maxBlocksPerGrid ? provisionalBlocksPerGrid
                                                                      : maxBlocksPerGrid;
 

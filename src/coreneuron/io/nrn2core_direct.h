@@ -29,7 +29,7 @@ extern int (*nrn2core_get_global_int_item_)(const char* name);
 extern int (*nrn2core_get_dat1_)(int tid,
                                  int& n_presyn,
                                  int& n_netcon,
-                                 std::vector<int>& output_gid,
+                                 std::vector<long long>& output_gid,
                                  int*& netcon_srcgid,
                                  std::vector<int>& netcon_negsrcgid_tid);
 
