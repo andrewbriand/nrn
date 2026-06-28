@@ -42,7 +42,7 @@ http://www.deshawresearch.com/resources_random123.html
 #include <cmath>
 
 #if defined(CORENEURON_ENABLE_GPU)
-#define CORENRN_RAN123_USE_UNIFIED_MEMORY false
+#define CORENRN_RAN123_USE_UNIFIED_MEMORY true
 #else
 #define CORENRN_RAN123_USE_UNIFIED_MEMORY false
 #endif
